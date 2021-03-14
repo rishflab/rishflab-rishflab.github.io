@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://rishflab.github.io/sitemap.xml

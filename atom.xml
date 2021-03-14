@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xml" href="https://rishflab.github.io/feed.xslt.xml"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en">
+    <title>rishflab devblog</title>
+    <link href="https://rishflab.github.io/atom.xml" rel="self" type="application/atom+xml"/>
+    <link href="https://rishflab.github.io" rel="alternate" type="text/html" />
+    <generator uri="https://www.getzola.org/">Zola</generator>
+    <updated>Sun, 14 Mar 2021 00:00:00 +0000</updated>
+    <id>https://rishflab.github.io/atom.xml</id>
+
+    
+    <author>
+        <name>rishflab</name>
+      
+        <email>[object]</email>
+      
+      
+    </author>
+    
+    <entry xml:lang="en">
+        <title>GPU Parallax Scrolling</title>
+        <link href="https://rishflab.github.io/blog/gpu-parallax-scrolling/" type="text/html"/>
+        <published>Sun, 14 Mar 2021 00:00:00 +0000</published>
+        <updated>Sun, 14 Mar 2021 00:00:00 +0000</updated>
+        <id>https://rishflab.github.io/blog/gpu-parallax-scrolling/</id>
+        <content type="html" xml:base="https://rishflab.github.io/blog/gpu-parallax-scrolling/">&lt;p&gt;If you are reading this article you are probably familiar with the parallax scrolling effect. You may of read an
+article on the internet explaining how to implement parallax scrolling by translating layers at different speeds.
+There is an easier and more performant way to do this. We can use a mixture of orthographic and perspective projections
+in our &lt;a rel=&quot;noopener nofollow noreferrer&quot; target=&quot;_blank&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;rishflab&#x2F;parallax-scrolling-shader&#x2F;blob&#x2F;master&#x2F;shaders&#x2F;shader.vert&quot;&gt;vertex shader&lt;&#x2F;a&gt; to achieve
+pixel-perfect parallax scrolling without having to add a layer system to our renderer.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;the-perspective-camera&quot;&gt;&lt;a class=&quot;zola-anchor&quot; href=&quot;#the-perspective-camera&quot; aria-label=&quot;Anchor link for: the-perspective-camera&quot;&gt;🔗&lt;&#x2F;a&gt;
+The Perspective Camera&lt;&#x2F;h4&gt;
+&lt;p&gt;The perspective camera will determine the position of the sprite on the screen. The position, look-at direction and min
+and max distance must be the same as the orthographic camera. The field-of-view can be modified to adjust the intensity
+of the parallax affect.&lt;&#x2F;p&gt;
+&lt;p&gt;In order to access perspective camera from vertex shader we add must add it to the uniforms binding. &lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#fdf6e3;&quot;&gt;
+&lt;code class=&quot;language-glsl&quot; data-lang=&quot;glsl&quot;&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; VERTEX SHADER BINDING
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#586e75;&quot;&gt;layout&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;(set = &lt;&#x2F;span&gt;&lt;span style=&quot;color:#6c71c4;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;, binding = &lt;&#x2F;span&gt;&lt;span style=&quot;color:#6c71c4;&quot;&gt;0&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;) &lt;&#x2F;span&gt;&lt;span style=&quot;color:#586e75;&quot;&gt;uniform&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; Uniforms {
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;mat4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; ortho;
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; NEW!
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;mat4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; persp;
+};
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;The orthographic camera does not need to be changed, but you should follow best practices to avoid texture filtering
+artifacts. This means the width and height of the orthographic camera should be set to create a 1-to-1 mapping
+of the sprite texture to screen space.&lt;&#x2F;p&gt;
+&lt;p&gt;See &lt;a rel=&quot;noopener nofollow noreferrer&quot; target=&quot;_blank&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;rishflab&#x2F;parallax-scrolling-shader&#x2F;blob&#x2F;master&#x2F;src&#x2F;camera.rs&quot;&gt;camera.rs&lt;&#x2F;a&gt; for an example of how
+to generate perspective and orthographic matrices.&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;shifting-the-orthographic-camera&quot;&gt;&lt;a class=&quot;zola-anchor&quot; href=&quot;#shifting-the-orthographic-camera&quot; aria-label=&quot;Anchor link for: shifting-the-orthographic-camera&quot;&gt;🔗&lt;&#x2F;a&gt;
+Shifting the Orthographic Camera&lt;&#x2F;h4&gt;
+&lt;p&gt;Next we calculate where the sprite centre will be in normalised-device-coordinates; rendered using perspective
+and orthographic cameras. We calculate the distance between these two centres and shift the orthographic
+projection of the sprite vertex by this distance. &lt;&#x2F;p&gt;
+&lt;pre style=&quot;background-color:#fdf6e3;&quot;&gt;
+&lt;code class=&quot;language-glsl&quot; data-lang=&quot;glsl&quot;&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; VERTEX SHADER MAIN
+&lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;void &lt;&#x2F;span&gt;&lt;span style=&quot;color:#b58900;&quot;&gt;main&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;() {
+    ...
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; We assume our sprites centres are always at (0.0, 0.0, 0.0)
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; centre = &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec3&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;(&lt;&#x2F;span&gt;&lt;span style=&quot;color:#6c71c4;&quot;&gt;0.0&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;), &lt;&#x2F;span&gt;&lt;span style=&quot;color:#6c71c4;&quot;&gt;1.0&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;);
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Calculate p_c, the perspective projection of the centre in clip space
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; p_c = persp &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; model &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; centre;
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Calculate o_c, the orthographic projection of the centre in clip space
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; o_c = ortho &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; model &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; centre;
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Calculate o_pos, the orthographic projection of the vertex in clip space
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; o_pos = ortho &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; model &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; vertex;
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Convert p_c, o_c and o_pos to normalised device coordinates
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; o_c_ndc = o_c&#x2F;o_c.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;w&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;;
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; p_c_ndc =  p_c&#x2F;p_c.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;w&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;;
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; o_pos_ndc = o_pos&#x2F;o_pos.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;w&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;;
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Calculate d_ndc, the distance between the perspective and orthographic
+    &#x2F;&#x2F; centres in normalised device coordinates
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; d_ndc = p_c_ndc - o_c_ndc;
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Calculate the shifted ndc position, pos_ndc, by shifting o_pos_ndc by
+    &#x2F;&#x2F; d_ndc. We are shifting the orthoghraphic projection of our sprite
+    &#x2F;&#x2F; vertex to where it would be located if it were rendered with 
+    &#x2F;&#x2F; perspective projection
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;vec4&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; pos_ndc = o_pos_ndc + d_ndc;
+
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#93a1a1;&quot;&gt;&#x2F;&#x2F; Convert back to clip space for output to the rasterizer. The rasterizer
+    &#x2F;&#x2F; stage expects the vertex position in clip space
+    &lt;&#x2F;span&gt;&lt;span style=&quot;color:#d33682;&quot;&gt;gl_Position &lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;= pos_ndc &lt;&#x2F;span&gt;&lt;span style=&quot;color:#859900;&quot;&gt;*&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt; o_pos.&lt;&#x2F;span&gt;&lt;span style=&quot;color:#268bd2;&quot;&gt;w&lt;&#x2F;span&gt;&lt;span style=&quot;color:#657b83;&quot;&gt;;
+
+}
+&lt;&#x2F;span&gt;&lt;&#x2F;code&gt;&lt;&#x2F;pre&gt;
+&lt;p&gt;Thats all there is to it. By shifting the orthographic render of the sprite, to where it should of been if it were
+rendered using a perspective camera, we have created the parallax scrolling effect!&lt;&#x2F;p&gt;
+&lt;h4 id=&quot;try-it-yourself&quot;&gt;&lt;a class=&quot;zola-anchor&quot; href=&quot;#try-it-yourself&quot; aria-label=&quot;Anchor link for: try-it-yourself&quot;&gt;🔗&lt;&#x2F;a&gt;
+Try it yourself&lt;&#x2F;h4&gt;
+&lt;p&gt;Clone the &lt;a rel=&quot;noopener nofollow noreferrer&quot; target=&quot;_blank&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;rishflab&#x2F;parallax-scrolling-shader.git&quot;&gt;repo&lt;&#x2F;a&gt;&lt;&#x2F;p&gt;
+&lt;p&gt;Build and run the example using &lt;code&gt;cargo run&lt;&#x2F;code&gt; to see it in action.&lt;&#x2F;p&gt;
+&lt;p&gt;You will need the &lt;a rel=&quot;noopener nofollow noreferrer&quot; target=&quot;_blank&quot; href=&quot;https:&#x2F;&#x2F;rustup.rs&quot;&gt;Rust programming language&lt;&#x2F;a&gt; to compile the example. &lt;&#x2F;p&gt;
+&lt;p&gt;Use the left and right arrow keys to move camera and observe the parallax scrolling effect.&lt;&#x2F;p&gt;
+&lt;p&gt;The scene is defined in &lt;a rel=&quot;noopener nofollow noreferrer&quot; target=&quot;_blank&quot; href=&quot;https:&#x2F;&#x2F;github.com&#x2F;rishflab&#x2F;parallax-scrolling-shader&#x2F;blob&#x2F;master&#x2F;src&#x2F;main.rs&quot;&gt;main.rs&lt;&#x2F;a&gt;. Feel
+free to move the trees around and adjust the field-of-view of the parallax camera.&lt;&#x2F;p&gt;
+</content>
+
+        
+          <category term="rust, glsl, shaders, gamedev, parallax, scrolling, rendering, renderer, 2D, engine, game, gpu" />
+        
+
+        
+
+    </entry>
+</feed>
